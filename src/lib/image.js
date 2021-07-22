@@ -1,11 +1,11 @@
 import sharp from 'sharp';
 import rp from 'request-promise-native';
-import config from 'config';
+import {imageable} from 'config';
 
-sharp.cache(config.imageable.cache);
-sharp.concurrency(config.imageable.concurrency);
-sharp.counters(config.imageable.counters);
-sharp.simd(config.imageable.simd);
+sharp.cache(imageable.cache);
+sharp.concurrency(imageable.concurrency);
+sharp.counters(imageable.counters);
+sharp.simd(imageable.simd);
 
 export async function downloadImage (url) {
   const response = await rp.get(url, { encoding: null });
