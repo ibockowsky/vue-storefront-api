@@ -67,3 +67,40 @@ export async function crop (buffer, width, height, x, y) {
     console.log(err);
   }
 }
+
+export async function convert (buffer, width, height, extension) {
+  const options = imageable.extensionsOptions[extension] ? imageable.extensionsOptions[extension] : {}
+
+  try {
+    let transformer;
+
+    switch (extension) {
+      case 'jpeg':
+        transformer = sharp(buffer).jpeg(options)
+        break
+      case 'png':
+        transformer = sharp(buffer).png(options)
+        break
+      case 'gif':
+        transformer = sharp(buffer).gif(options)
+        break
+      case 'webp':
+        transformer = sharp(buffer).webp(options)
+        break
+      default:
+        throw new Error('Unknown extension or missing config')
+    }
+
+    if (width || height) {
+      const options = {
+        withoutEnlargement: true,
+        fit: sharp.fit.inside
+      }
+      transformer.resize(width, height, options)
+    }
+
+    return transformer.toBuffer();
+  } catch (err) {
+    console.log(err);
+  }
+}

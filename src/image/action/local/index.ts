@@ -1,40 +1,50 @@
 import ImageAction from '../abstract'
 import mime from 'mime-types'
-import { downloadImage, fit, identify, resize } from '../../../lib/image'
+import { downloadImage, fit, identify, resize, convert } from '../../../lib/image'
 
 export default class LocalImageAction extends ImageAction {
   public imageOptions
+  public SUPPORTED_EXTENSIONS = ['jpeg', 'png', 'gif', 'webp']
   public SUPPORTED_MIMETYPES = ['image/gif', 'image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
   public imageBuffer: Buffer
 
-  public get whitelistDomain (): string[] {
+  public get whitelistDomain(): string[] {
     return this.options.imageable.whitelist
   }
 
-  public get maxAgeForResponse () {
+  public get maxAgeForResponse() {
     return 365.25 * 86400
   }
 
-  public getImageURL (): string {
+  public getImageURL(): string {
     return this.imageOptions.imgUrl
   }
 
-  public getOption () {
+  public getOption() {
     let imgUrl: string
     let width: number
     let height: number
     let action: string
+    let extension: string
+
     if (this.req.query.url) { // url provided as the query param
       imgUrl = decodeURIComponent(this.req.query.url as string)
       width = parseInt(this.req.query.width as string)
       height = parseInt(this.req.query.height as string)
       action = this.req.query.action as string
+      // extension = this.req.query.extension ? this.req.query.extension as string : '' as string
+      extension = this.req.query.extension as string
     } else {
-      let urlParts = this.req.url.split('/')
+      const urlParts = this.req.url.split('/')
       width = parseInt(urlParts[1])
       height = parseInt(urlParts[2])
       action = urlParts[3]
-      imgUrl = `${this.options[this.options.platform].imgUrl}/${urlParts.slice(4).join('/')}` // full original image url
+
+      if (action.includes('convert')) {
+        [action, extension = ''] = action.split('-')
+      }
+
+      imgUrl = `${this.options.imageable.imgUrl}/${urlParts.slice(4).join('/')}` // full original image url
       if (urlParts.length < 5) {
         this.res.status(400).send({
           code: 400,
@@ -48,12 +58,13 @@ export default class LocalImageAction extends ImageAction {
       imgUrl,
       width,
       height,
-      action
+      action,
+      extension
     }
   }
 
-  public validateOptions () {
-    const { width, height, action } = this.imageOptions
+  public validateOptions() {
+    const { width, height, action, extension } = this.imageOptions
     if (isNaN(width) || isNaN(height) || !this.SUPPORTED_ACTIONS.includes(action)) {
       return this.res.status(400).send({
         code: 400,
@@ -67,9 +78,16 @@ export default class LocalImageAction extends ImageAction {
         result: `Width and height must have a value between 0 and ${this.options.imageable.imageSizeLimit}`
       })
     }
+
+    if (action === 'convert' && !this.SUPPORTED_EXTENSIONS.includes(extension)) {
+      return this.res.status(400).send({
+        code: 400,
+        result: `Please provide valid extension: ${this.SUPPORTED_EXTENSIONS.join(', ')}.`
+      })
+    }
   }
 
-  public validateMIMEType () {
+  public validateMIMEType() {
     const mimeType = mime.lookup(this.imageOptions.imgUrl)
 
     if (mimeType === false || !this.SUPPORTED_MIMETYPES.includes(mimeType)) {
@@ -82,7 +100,7 @@ export default class LocalImageAction extends ImageAction {
     this.mimeType = mimeType
   }
 
-  public async prossesImage () {
+  public async prossesImage() {
     const { imgUrl } = this.imageOptions
 
     try {
@@ -93,7 +111,7 @@ export default class LocalImageAction extends ImageAction {
         result: `Unable to download the requested image ${imgUrl}`
       })
     }
-    const { action, width, height } = this.imageOptions
+    const { action, width, height, extension } = this.imageOptions
     switch (action) {
       case 'resize':
         this.imageBuffer = await resize(this.imageBuffer, width, height)
@@ -103,6 +121,9 @@ export default class LocalImageAction extends ImageAction {
         break
       case 'identify':
         this.imageBuffer = await identify(this.imageBuffer)
+        break
+      case 'convert':
+        this.imageBuffer = await convert(this.imageBuffer, width, height, extension)
         break
       default:
         throw new Error('Unknown action')
